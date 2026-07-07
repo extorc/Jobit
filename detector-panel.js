@@ -192,20 +192,38 @@
 
     detectButton.addEventListener("click", async () => {
       detectButton.disabled = true;
-      statusElement.textContent = "Detecting fields and asking Ollama...";
+      statusElement.textContent = "Detecting fields...";
       outputElement.textContent = "";
 
       try {
         const result = getInputFields();
         const count = result.fields.length;
-        const ollamaResult = await chrome.runtime.sendMessage({ type: "ASK_OLLAMA_HELLO" });
+        statusElement.textContent = `Detected ${count} field${count === 1 ? "" : "s"}. Asking Ollama one by one...`;
+        outputElement.textContent = `${JSON.stringify(result, null, 2)}\n\nOllama field types:`;
 
-        if (ollamaResult?.error) {
-          throw new Error(ollamaResult.error);
+        for (const field of result.fields) {
+          const fieldNumber = field.index + 1;
+          statusElement.textContent = `Asking Ollama about field ${fieldNumber} of ${count}...`;
+
+          try {
+            const ollamaResult = await chrome.runtime.sendMessage({
+              type: "ASK_OLLAMA_FIELD_TYPE",
+              field
+            });
+
+            if (ollamaResult?.error) {
+              throw new Error(ollamaResult.error);
+            }
+
+            outputElement.textContent += `\nField ${fieldNumber}: ${ollamaResult?.response || ""}`;
+          } catch (error) {
+            outputElement.textContent += `\nField ${fieldNumber}: ${error.message}`;
+          }
+
+          outputElement.scrollTop = outputElement.scrollHeight;
         }
 
-        statusElement.textContent = `Detected ${count} field${count === 1 ? "" : "s"}`;
-        outputElement.textContent = `${JSON.stringify(result, null, 2)}\n\nOllama response:\n${ollamaResult?.response || ""}`;
+        statusElement.textContent = `Detected ${count} field${count === 1 ? "" : "s"}. Ollama responses complete.`;
       } catch (error) {
         statusElement.textContent = "Could not complete request";
         outputElement.textContent = error.message;

@@ -23,7 +23,21 @@ async function showDetectorPanel(tab) {
   }
 }
 
-async function askOllamaHello() {
+function buildFieldTypePrompt(field) {
+  return `Read this one detected input field JSON and return only one plain string.
+
+Output this field's type wrapped in angle brackets.
+Use the exact type value from the field.
+Do not include markdown, explanations, labels, JSON, or any extra text.
+
+Example output:
+<text>
+
+Detected input field JSON:
+${JSON.stringify(field, null, 2)}`;
+}
+
+async function askOllamaForFieldType(field) {
   const response = await fetch(OLLAMA_URL, {
     method: "POST",
     headers: {
@@ -31,8 +45,11 @@ async function askOllamaHello() {
     },
     body: JSON.stringify({
       model: OLLAMA_MODEL,
-      prompt: "Hello",
-      stream: false
+      prompt: buildFieldTypePrompt(field),
+      stream: false,
+      options: {
+        temperature: 0
+      }
     })
   });
 
@@ -47,11 +64,11 @@ async function askOllamaHello() {
 chrome.action.onClicked.addListener(showDetectorPanel);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type !== "ASK_OLLAMA_HELLO") {
+  if (message.type !== "ASK_OLLAMA_FIELD_TYPE") {
     return false;
   }
 
-  askOllamaHello()
+  askOllamaForFieldType(message.field)
     .then((response) => sendResponse({ response }))
     .catch((error) => sendResponse({ error: error.message }));
 
