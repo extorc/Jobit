@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Input Field Detector",
+  "version": "1.0.0",
+  "description": "Detects input fields on the current page and displays them as JSON.",
+  "action": {
+    "default_title": "Detect Fields"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "http://localhost:11434/*",
+    "http://127.0.0.1:11434/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["detector-panel.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
