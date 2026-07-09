@@ -196,10 +196,16 @@
       outputElement.textContent = "";
 
       try {
-        const result = getInputFields();
+        const frameResult = await chrome.runtime.sendMessage({ type: "GET_FIELDS_FROM_ALL_FRAMES" });
+
+        if (frameResult?.error) {
+          throw new Error(frameResult.error);
+        }
+
+        const result = frameResult?.response || getInputFields();
         const count = result.fields.length;
         statusElement.textContent = `Detected ${count} field${count === 1 ? "" : "s"}. Asking Ollama one by one...`;
-        outputElement.textContent = `${JSON.stringify(result, null, 2)}\n\nOllama field types:`;
+        outputElement.textContent = `${JSON.stringify(result, null, 2)}\n\nOllama field reasoning:`;
 
         for (const field of result.fields) {
           const fieldNumber = field.index + 1;
