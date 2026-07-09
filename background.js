@@ -141,7 +141,10 @@ async function getFieldsFromAllFrames(tabId) {
   }));
 
   const fields = injectionResults
-    .flatMap((item) => item.result?.fields || [])
+    .flatMap((item) => (item.result?.fields || []).map((field) => ({
+      ...field,
+      frameId: item.frameId
+    })))
     .map((field, index) => ({ ...field, index }));
 
   return {
@@ -163,6 +166,62 @@ async function getApplicantInfo() {
   }
 
   return response.json();
+}
+
+function fillTextFieldInFrame(field, value) {
+  const textInputTypes = new Set([
+    "",
+    "text",
+    "email",
+    "tel",
+    "url",
+    "search",
+    "number"
+  ]);
+  const element = document.querySelector(field.selector);
+
+  if (!element) {
+    return { filled: false, reason: "field not found" };
+  }
+
+  const tagName = element.tagName.toLowerCase();
+  const type = (element.getAttribute("type") || "text").toLowerCase();
+  const isTextField = tagName === "textarea" || (tagName === "input" && textInputTypes.has(type));
+
+  if (!isTextField) {
+    return { filled: false, reason: "not a text field" };
+  }
+
+  if (element.disabled || element.readOnly) {
+    return { filled: false, reason: "field is disabled or readonly" };
+  }
+
+  const prototype = tagName === "textarea" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const valueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+
+  if (valueSetter) {
+    valueSetter.call(element, value);
+  } else {
+    element.value = value;
+  }
+
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+
+  return { filled: true };
+}
+
+async function fillTextField(tabId, field, value) {
+  const injectionResults = await chrome.scripting.executeScript({
+    target: {
+      tabId,
+      frameIds: [field.frameId || 0]
+    },
+    func: fillTextFieldInFrame,
+    args: [field, value]
+  });
+
+  return injectionResults[0]?.result || { filled: false, reason: "no fill result" };
 }
 
 function buildFieldTypePrompt(field, applicantInfo) {
@@ -249,6 +308,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === "ASK_OLLAMA_FIELD_TYPE") {
     askOllamaForFieldType(message.field)
+      .then((response) => sendResponse({ response }))
+      .catch((error) => sendResponse({ error: error.message }));
+
+    return true;
+  }
+
+  if (message.type === "FILL_TEXT_FIELD") {
+    fillTextField(sender.tab.id, message.field, message.value)
       .then((response) => sendResponse({ response }))
       .catch((error) => sendResponse({ error: error.message }));
 

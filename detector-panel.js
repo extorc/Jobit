@@ -190,12 +190,12 @@
       host.remove();
     });
 
-    function appendOllamaLine(fieldNumber, responseText, forceUnavailable = false) {
+    function appendOllamaLine(fieldNumber, responseText, forceUnavailable = false, suffix = "") {
       const normalizedResponse = String(responseText || "").trim();
       const isUnavailable = forceUnavailable || normalizedResponse.toUpperCase().startsWith("NOT_AVAILABLE");
       const line = document.createElement("span");
 
-      line.textContent = `\nField ${fieldNumber}: ${normalizedResponse}`;
+      line.textContent = `\nField ${fieldNumber}: ${normalizedResponse}${suffix}`;
 
       if (isUnavailable) {
         line.style.color = "#c62828";
@@ -203,6 +203,30 @@
       }
 
       outputElement.append(line);
+    }
+
+    function getApplicantValue(responseText) {
+      const normalizedResponse = String(responseText || "").trim();
+
+      if (!normalizedResponse || normalizedResponse.toUpperCase().startsWith("NOT_AVAILABLE")) {
+        return "";
+      }
+
+      const separatorIndex = normalizedResponse.indexOf(":");
+
+      if (separatorIndex === -1) {
+        return "";
+      }
+
+      return normalizedResponse.slice(separatorIndex + 1).trim();
+    }
+
+    function isTextLikeField(field) {
+      const textTypes = new Set(["", "text", "email", "tel", "url", "search", "number"]);
+      const tagName = String(field.tagName || "").toLowerCase();
+      const type = String(field.type || "").toLowerCase();
+
+      return tagName === "textarea" || (tagName === "input" && textTypes.has(type));
     }
 
     detectButton.addEventListener("click", async () => {
@@ -236,7 +260,27 @@
               throw new Error(ollamaResult.error);
             }
 
-            appendOllamaLine(fieldNumber, ollamaResult?.response || "");
+            const responseText = ollamaResult?.response || "";
+            const applicantValue = getApplicantValue(responseText);
+            let suffix = "";
+
+            if (applicantValue && isTextLikeField(field)) {
+              const fillResult = await chrome.runtime.sendMessage({
+                type: "FILL_TEXT_FIELD",
+                field,
+                value: applicantValue
+              });
+
+              if (fillResult?.error) {
+                suffix = ` (fill failed: ${fillResult.error})`;
+              } else if (fillResult?.response?.filled) {
+                suffix = " (filled)";
+              } else if (fillResult?.response?.reason) {
+                suffix = ` (not filled: ${fillResult.response.reason})`;
+              }
+            }
+
+            appendOllamaLine(fieldNumber, responseText, false, suffix);
           } catch (error) {
             appendOllamaLine(fieldNumber, `NOT_AVAILABLE: ${error.message}`, true);
           }
