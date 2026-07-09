@@ -75,6 +75,14 @@ function collectInputFieldsInFrame() {
       }));
     }
 
+    const optionElements = element.querySelectorAll('option, [role="option"], [data-value], li[data-option]');
+    if (optionElements.length > 0) {
+      return [...optionElements].map((option) => ({
+        text: (option.textContent || option.innerText || "").trim(),
+        value: option.getAttribute("data-value") || option.getAttribute("value") || (option.textContent || option.innerText || "").trim()
+      }));
+    }
+
     return [];
   }
 
@@ -97,12 +105,22 @@ function collectInputFieldsInFrame() {
     return parts.join(" > ");
   }
 
+  function isCustomDropdown(element) {
+    const role = element.getAttribute("role");
+    return role === "combobox" || role === "listbox" || element.hasAttribute("aria-haspopup");
+  }
+
   function readField(element, index) {
+    const customDropdown = isCustomDropdown(element);
+
     return {
       index,
       frameUrl: window.location.href,
       tagName: element.tagName.toLowerCase(),
-      type: element.type || element.tagName.toLowerCase(),
+      type: customDropdown ? "combobox" : (element.type || element.tagName.toLowerCase()),
+      hasAriaHaspopup: element.hasAttribute("aria-haspopup") || false,
+      ariaHaspopupValue: element.getAttribute("aria-haspopup") || "",
+      role: element.getAttribute("role") || "",
       selector: getCssPath(element),
       id: element.id || "",
       name: element.name || "",
@@ -123,7 +141,20 @@ function collectInputFieldsInFrame() {
   return {
     frameUrl: window.location.href,
     title: document.title,
-    fields: [...document.querySelectorAll("input, textarea, select")].map(readField)
+    fields: [...document.querySelectorAll(
+      'input, textarea, select, ' +
+      '[role="combobox"], [role="listbox"], ' +
+      '[aria-haspopup]'
+    )]
+      .filter(element => {
+        if (element.matches('input, textarea, select')) return true;
+        if (element.matches('[role="combobox"], [role="listbox"], [aria-haspopup]')) {
+          if (element.matches('input, textarea, select')) return false;
+          return true;
+        }
+        return true;
+      })
+      .map(readField)
   };
 }
 
@@ -187,6 +218,62 @@ function fillTextFieldInFrame(field, value) {
   const tagName = element.tagName.toLowerCase();
   const type = (element.getAttribute("type") || "text").toLowerCase();
   const isTextField = tagName === "textarea" || (tagName === "input" && textInputTypes.has(type));
+
+  const isDropdown = field.type === "combobox" || field.role === "combobox" || field.role === "listbox" || field.hasAriaHaspopup;
+
+  if (isDropdown && tagName !== "select") {
+    // Custom dropdown - click to open, find option matching value, click it
+    if (element.disabled || element.readOnly) {
+      return { filled: false, reason: "field is disabled or readonly" };
+    }
+
+    element.click();
+    element.dispatchEvent(new Event("mousedown", { bubbles: true }));
+    element.focus();
+
+    // Try to find a matching option by text or value
+    const optionElements = document.querySelectorAll(
+      `[role="option"], ${field.selector} option`
+    );
+    let matchedOption = null;
+
+    for (const opt of optionElements) {
+      const optText = (opt.textContent || opt.innerText || "").trim().toLowerCase();
+      const optValue = (opt.getAttribute("data-value") || opt.getAttribute("value") || "").toLowerCase();
+      const searchValue = String(value).toLowerCase();
+
+      if (optText === searchValue || optValue === searchValue ||
+          optText.includes(searchValue) || searchValue.includes(optText)) {
+        matchedOption = opt;
+        break;
+      }
+    }
+
+    if (matchedOption) {
+      matchedOption.click();
+      matchedOption.dispatchEvent(new Event("mousedown", { bubbles: true }));
+      matchedOption.dispatchEvent(new Event("mouseup", { bubbles: true }));
+
+      // Also set inner text on the combobox if it's contenteditable or has text
+      const inputEl = element.querySelector('input') || element;
+      if (inputEl && (inputEl.isContentEditable || inputEl.tagName === 'INPUT')) {
+        inputEl.textContent = value;
+        inputEl.value = value;
+        inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+      element.dispatchEvent(new Event("blur", { bubbles: true }));
+
+      return { filled: true, method: "dropdown_click" };
+    }
+
+    // If no option matched, try setting via aria-activedescendant or direct input
+    element.setAttribute("aria-activedescendant", "");
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+
+    return { filled: false, reason: "no matching dropdown option found" };
+  }
 
   if (!isTextField) {
     return { filled: false, reason: "not a text field" };

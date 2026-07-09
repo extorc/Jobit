@@ -229,6 +229,10 @@
       return tagName === "textarea" || (tagName === "input" && textTypes.has(type));
     }
 
+    function isDropdownField(field) {
+      return field.type === "combobox" || field.role === "combobox" || field.role === "listbox" || field.hasAriaHaspopup;
+    }
+
     detectButton.addEventListener("click", async () => {
       detectButton.disabled = true;
       statusElement.textContent = "Detecting fields...";
@@ -264,7 +268,7 @@
             const applicantValue = getApplicantValue(responseText);
             let suffix = "";
 
-            if (applicantValue && isTextLikeField(field)) {
+            if (applicantValue && (isTextLikeField(field) || isDropdownField(field))) {
               const fillResult = await chrome.runtime.sendMessage({
                 type: "FILL_TEXT_FIELD",
                 field,

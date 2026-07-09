@@ -54,6 +54,14 @@ function getOptions(element) {
     }));
   }
 
+  const optionElements = element.querySelectorAll('option, [role="option"], [data-value], li[data-option]');
+  if (optionElements.length > 0) {
+    return [...optionElements].map((option) => ({
+      text: (option.textContent || option.innerText || "").trim(),
+      value: option.getAttribute("data-value") || option.getAttribute("value") || (option.textContent || option.innerText || "").trim()
+    }));
+  }
+
   return [];
 }
 
@@ -76,11 +84,21 @@ function getCssPath(element) {
   return parts.join(" > ");
 }
 
+function isCustomDropdown(element) {
+  const role = element.getAttribute("role");
+  return role === "combobox" || role === "listbox" || element.hasAttribute("aria-haspopup");
+}
+
 function readInputField(element, index) {
+  const customDropdown = isCustomDropdown(element);
+
   return {
     index,
     tagName: element.tagName.toLowerCase(),
-    type: element.type || element.tagName.toLowerCase(),
+    type: customDropdown ? "combobox" : (element.type || element.tagName.toLowerCase()),
+    hasAriaHaspopup: element.hasAttribute("aria-haspopup") || false,
+    ariaHaspopupValue: element.getAttribute("aria-haspopup") || "",
+    role: element.getAttribute("role") || "",
     selector: getCssPath(element),
     id: element.id || "",
     name: element.name || "",
@@ -99,7 +117,19 @@ function readInputField(element, index) {
 }
 
 function getInputFields() {
-  const fields = [...document.querySelectorAll("input, textarea, select")]
+  const fields = [...document.querySelectorAll(
+    'input, textarea, select, ' +
+    '[role="combobox"], [role="listbox"], ' +
+    '[aria-haspopup]'
+  )]
+    .filter(element => {
+      if (element.matches('input, textarea, select')) return true;
+      if (element.matches('[role="combobox"], [role="listbox"], [aria-haspopup]')) {
+        if (element.matches('input, textarea, select')) return false;
+        return true;
+      }
+      return true;
+    })
     .map(readInputField);
 
   return {
