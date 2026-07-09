@@ -166,21 +166,49 @@ async function getApplicantInfo() {
 }
 
 function buildFieldTypePrompt(field, applicantInfo) {
-  return `Read this one detected input field JSON and the applicant JSON, then return only one plain string.
+  return `You are matching one web form field to one applicant profile value.
+This is NOT a programming task. Do NOT write code, pseudocode, Python, JavaScript, functions, regex, algorithms, or explanations.
 
-Use the entire field JSON to decipher what the field is asking for: label, name, id, selector, placeholder, type, options, autocomplete, required state, and current value.
-Use the applicant JSON as context for what applicant information exists and how it is named.
-Reply with one-line reasoning in fewer than 50 characters.
-Do not include markdown, labels, JSON, quotes, or extra text.
+Your job:
+1. Read the FIELD JSON.
+2. Decide what information the field asks for.
+3. Look for that information in APPLICANT JSON.
+4. Return exactly one line using exactly one of these formats:
 
-Example output:
-Needs applicant email address
+If a matching applicant key exists:
+key: value
 
-Detected input field JSON:
+If no matching applicant key exists or the value is empty:
+NOT_AVAILABLE: reason
+
+Rules:
+- Use only keys and values that already exist in APPLICANT JSON.
+- Do not invent or infer missing values.
+- Do not output JSON.
+- Do not output markdown.
+- Do not output quotes.
+- Do not output more than one line.
+- Do not mention how to solve the task.
+- The response must be under 80 characters.
+
+Good examples:
+email: mittalnitin.2022@gmail.com
+phone: 9958850564
+NOT_AVAILABLE: no work authorization
+
+Bad examples:
+def match_field(...)
+Here is a Python script
+{"email":"x"}
+The field appears to ask for email
+
+FIELD JSON:
 ${JSON.stringify(field, null, 2)}
 
-Applicant JSON:
-${JSON.stringify(applicantInfo, null, 2)}`;
+APPLICANT JSON:
+${JSON.stringify(applicantInfo, null, 2)}
+
+Return one line only:`;
 }
 
 async function askOllamaForFieldType(field) {

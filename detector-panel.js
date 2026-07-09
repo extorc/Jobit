@@ -190,6 +190,21 @@
       host.remove();
     });
 
+    function appendOllamaLine(fieldNumber, responseText, forceUnavailable = false) {
+      const normalizedResponse = String(responseText || "").trim();
+      const isUnavailable = forceUnavailable || normalizedResponse.toUpperCase().startsWith("NOT_AVAILABLE");
+      const line = document.createElement("span");
+
+      line.textContent = `\nField ${fieldNumber}: ${normalizedResponse}`;
+
+      if (isUnavailable) {
+        line.style.color = "#c62828";
+        line.style.fontWeight = "700";
+      }
+
+      outputElement.append(line);
+    }
+
     detectButton.addEventListener("click", async () => {
       detectButton.disabled = true;
       statusElement.textContent = "Detecting fields...";
@@ -205,7 +220,7 @@
         const result = frameResult?.response || getInputFields();
         const count = result.fields.length;
         statusElement.textContent = `Detected ${count} field${count === 1 ? "" : "s"}. Asking Ollama one by one...`;
-        outputElement.textContent = `${JSON.stringify(result, null, 2)}\n\nOllama field reasoning:`;
+        outputElement.textContent = `${JSON.stringify(result, null, 2)}\n\nOllama applicant values:`;
 
         for (const field of result.fields) {
           const fieldNumber = field.index + 1;
@@ -221,9 +236,9 @@
               throw new Error(ollamaResult.error);
             }
 
-            outputElement.textContent += `\nField ${fieldNumber}: ${ollamaResult?.response || ""}`;
+            appendOllamaLine(fieldNumber, ollamaResult?.response || "");
           } catch (error) {
-            outputElement.textContent += `\nField ${fieldNumber}: ${error.message}`;
+            appendOllamaLine(fieldNumber, `NOT_AVAILABLE: ${error.message}`, true);
           }
 
           outputElement.scrollTop = outputElement.scrollHeight;
